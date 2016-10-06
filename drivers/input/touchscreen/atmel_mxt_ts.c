@@ -597,7 +597,9 @@ struct mxt_data {
 	bool is_ignore_channel_saved;
 	bool init_complete;
 	bool use_last_golden;
+        bool irq_enabled;
 	struct mutex golden_mutex;
+        bool keys_off;
 
 
 	/* Slowscan parameters	*/
@@ -666,6 +668,7 @@ static const struct mxt_i2c_address_pair mxt_i2c_addresses[] = {
 	{ 0x34, 0x5a },
 	{ 0x35, 0x5b },
 #endif
+
 };
 
 static int mxt_bootloader_read(struct mxt_data *data, u8 *val, unsigned int count)
@@ -1720,6 +1723,11 @@ static void mxt_proc_t15_messages(struct mxt_data *data, u8 *msg)
 	bool sync = false;
 	unsigned long keystates = le32_to_cpu(msg[2]);
 	int index = data->current_index;
+
+
+	if(data->keys_off) {
+		return;
+	}
 
 	for (key = 0; key < pdata->config_array[index].key_num; key++) {
 		curr_state = test_bit(key, &data->keystatus);
@@ -3417,7 +3425,11 @@ static ssize_t mxt_update_fw_store(struct device *dev,
 	}
 
 	dev_info(dev, "Identify firmware name :%s \n", fw_name);
-	disable_irq(data->irq);
+
+	if(likely(data->irq_enabled)) {
+		disable_irq(data->irq);
+		data->irq_enabled=false;
+	}
 
 	error = mxt_load_fw(dev, fw_name);
 	if (error) {
@@ -3438,7 +3450,12 @@ static ssize_t mxt_update_fw_store(struct device *dev,
 	}
 
 	if (data->state == APPMODE) {
-		enable_irq(data->irq);
+
+		if (likely(!data->irq_enabled)) {
+			enable_irq(data->irq);
+			data->irq_enabled=true;
+		}
+
 	}
 
 	kfree(fw_name);
@@ -3497,6 +3514,38 @@ static ssize_t mxt_pause_store(struct device *dev,
 		return -EINVAL;
 	}
 }
+
+
+static ssize_t mxt_keys_off_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	int count;
+	char c;
+
+	c = data->keys_off ? '1' : '0';
+	count = sprintf(buf, "%c\n", c);
+
+	return count;
+}
+
+static ssize_t mxt_keys_off_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct mxt_data *data = dev_get_drvdata(dev);
+	int i;
+
+	if (sscanf(buf, "%u", &i) == 1 && i < 2) {
+		data->keys_off = (i == 1);
+
+		dev_dbg(dev, "%s\n", i ? "hw keys off" : "hw keys on");
+		return count;
+	} else {
+		dev_dbg(dev, "keys_off write error\n");
+		return -EINVAL;
+	}
+}
+
 
 static ssize_t mxt_debug_enable_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -4759,6 +4808,8 @@ static DEVICE_ATTR(debug_enable, S_IWUSR | S_IRUSR, mxt_debug_enable_show,
 			mxt_debug_enable_store);
 static DEVICE_ATTR(pause_driver, S_IWUSR | S_IRUSR, mxt_pause_show,
 			mxt_pause_store);
+static DEVICE_ATTR(keys_off, S_IWUSR | S_IRUSR, mxt_keys_off_show,
+			mxt_keys_off_store);
 static DEVICE_ATTR(version, S_IRUGO, mxt_version_show, NULL);
 static DEVICE_ATTR(build, S_IRUGO, mxt_build_show, NULL);
 static DEVICE_ATTR(slowscan_enable, S_IWUSR | S_IRUSR,
@@ -4780,6 +4831,7 @@ static struct attribute *mxt_attrs[] = {
 	&dev_attr_pause_driver.attr,
 	&dev_attr_version.attr,
 	&dev_attr_build.attr,
+        &dev_attr_keys_off.attr,
 	&dev_attr_slowscan_enable.attr,
 	&dev_attr_self_tune.attr,
 	&dev_attr_golden_ref.attr,
@@ -4901,7 +4953,10 @@ static int mxt_suspend(struct device *dev)
 	struct mxt_data *data = i2c_get_clientdata(client);
 	struct input_dev *input_dev = data->input_dev;
 
-	disable_irq(client->irq);
+	if(likely(data->irq_enabled)) {
+		disable_irq(client->irq);
+		data->irq_enabled=false;
+	}
 
 	data->safe_count = 0;
 	cancel_delayed_work_sync(&data->update_setting_delayed_work);

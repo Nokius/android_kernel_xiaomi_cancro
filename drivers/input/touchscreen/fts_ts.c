@@ -1368,7 +1368,7 @@ static int fts_input_disable(struct input_dev *in_dev)
 #ifdef CONFIG_PM
 	struct fts_data *fts = input_get_drvdata(in_dev);
 
-ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	bool prevent_sleep = false;
 #if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
 	prevent_sleep = (dt2w_switch > 0);
