@@ -1512,8 +1512,9 @@ static void mxt_proc_t81_message(struct mxt_data *data, u8 *msg)
 
 	dev_info(dev, "msg for t81 = 0x%x 0x%x\n",
 		msg[0], msg[1]);
-printk(KERN_WARNING "~~~~ FOUND T81 MESSAGE");
-printk(KERN_WARNING "~~~~ data->is_stopped %d", data->is_stopped);
+  
+  printk(KERN_WARNING "~~~~ FOUND T81 MESSAGE");
+  printk(KERN_WARNING "~~~~ data->is_stopped %d", data->is_stopped);
 
 	if (data->is_stopped) {
 		data->is_wakeup_by_gesture = true;
@@ -1521,6 +1522,10 @@ printk(KERN_WARNING "~~~~ data->is_stopped %d", data->is_stopped);
 		input_sync(input_dev);
 		input_event(input_dev, EV_KEY, KEY_POWER, 0);
 		input_sync(input_dev);
+    printk(KERN_WARNING "~~~~ EMULATED POWER KEY PRESS");
+    input_event(input_dev, EV_MSC, MSC_GESTURE, 4);
+    input_sync(input_dev);
+    printk(KERN_WARNING "~~~~ EMITTED EV_MSC MSC_GESTURE 4");
 	}
 }
 
@@ -4144,7 +4149,8 @@ static ssize_t  mxt_wakeup_mode_store(struct device *dev,
 	int index = data->current_index;
 	unsigned long val;
 	int error;
-printk(KERN_WARNING "~~~~~ wakeup self adcx = 0x%x\n", pdata->config_array[index].wake_up_self_adcx);
+
+  printk(KERN_WARNING "~~~~~ wakeup self adcx = 0x%x\n", pdata->config_array[index].wake_up_self_adcx);
 
 	if (pdata->config_array[index].wake_up_self_adcx == 0)
 		return count;
@@ -4154,7 +4160,8 @@ printk(KERN_WARNING "~~~~~ wakeup self adcx = 0x%x\n", pdata->config_array[index
 	if (!error)
 		data->wakeup_gesture_mode = (u8)val;
 
-printk(KERN_WARNING "~~~~~ wakeup_gesture_mode = %d\n", data->wakeup_gesture_mode);
+  printk(KERN_WARNING "~~~~~ wakeup_gesture_mode = %d\n", data->wakeup_gesture_mode);
+
 	mxt_enable_gesture_mode(data);
 
 	return error ? : count;
@@ -4373,10 +4380,10 @@ static void mxt_switch_mode_work(struct work_struct *work)
 				value == MXT_INPUT_EVENT_WAKUP_MODE_OFF) {
 		if (pdata->config_array[index].wake_up_self_adcx != 0) {
 			data->wakeup_gesture_mode = value - MXT_INPUT_EVENT_WAKUP_MODE_OFF;
-                printk(KERN_WARNING "~~~~ wakeup gesture mode = %d\n", data->wakeup_gesture_mode);
+      printk(KERN_WARNING "~~~~ wakeup gesture mode = %d\n", data->wakeup_gesture_mode);
 			mxt_enable_gesture_mode(data);
 		}
-        else printk(KERN_WARNING "!!!! pdata->config_array[index].wakeup.... = %d\n", pdata->config_array[index].wake_up_self_adcx);
+    else printk(KERN_WARNING "!!!! pdata->config_array[index].wakeup.... = %d\n", pdata->config_array[index].wake_up_self_adcx);
 	}
 
 	if (ms != NULL) {
@@ -4959,6 +4966,9 @@ static int mxt_initialize_input_device(struct mxt_data *data)
 							data->pdata->config_array[index].key_codes[i]);
 		}
 	}
+
+	//if (pdata->config_array[index].wake_up_self_adcx != 0)
+	__set_bit(EV_MSC, input_dev->evbit); __set_bit(MSC_GESTURE, input_dev->mscbit);
 
 	input_set_drvdata(input_dev, data);
 
